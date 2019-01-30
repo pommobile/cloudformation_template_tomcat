@@ -1,0 +1,308 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  SBNOutputReference:
+    Type: String
+    Default: SBNxxSTAGExxPrivateOutput
+  SCGOutputReference1:
+    Type: String
+    Default: SCGxxSTAGExxSSHFromPublicToPrivateOutput
+    Description: Reference to security group output that Node is to be connected to
+  SCGOutputReference2:
+    Type: String
+    Default: SCGxxSTAGExxHTTP4200FromPublicToPrivateOutput
+    Description: >-
+      Reference to another security group output that Node is to be connected
+      to, or empty
+  SCGOutputReference3:
+    Type: String
+    Default: SCGxxSTAGExxHTTP4200FromPrivateToPrivateOutput
+    Description: >-
+      Reference to another security group output that Node is to be connected
+      to, or empty
+  CloudformationCodedeployTimeStampIfSnaphost:
+    Type: String
+    Default: yyyyMMdd.HHmmss-i
+    Description: >-
+      If you depend on a snapshot of cloudformation.codedeploy, enter the
+      snapshot timestamp, or leave as is.
+  CloudformationTemplateTomcatTimeStampIfSnaphost:
+    Type: String
+    Default: yyyyMMdd.HHmmss-i
+    Description: >-
+      If you depend on a snapshot of cloudformation.template.tomcat, enter the
+      snapshot timestamp, or leave as is.
+Mappings:
+  Constants:
+    Path:
+      Protocol: 's3://'
+    CloudformationCodedeployCoordinates:
+      GroupId: cloudformation
+      ArtifactId: codedeploy
+      Version: xxCLOUDFORMATION_CODEDEPLOY_VERSIONxx
+    CloudformationTemplateTomcatCoordinates:
+      GroupId: cloudformation/template
+      ArtifactId: tomcat
+      Version: xxCLOUDFORMATION_TEMPLATE_TOMCAT_VERSIONxx
+Conditions:
+  OneSCG: !Equals 
+    - !Ref SCGOutputReference2
+    - ''
+  TwoSCGs: !And 
+    - !Not 
+      - !Condition OneSCG
+    - !Equals 
+      - !Ref SCGOutputReference3
+      - ''
+  hasCloudformationCodedeployNoVersion: !Equals 
+    - !FindInMap 
+      - Constants
+      - CloudformationCodedeployCoordinates
+      - Version
+    - ''
+  hasCloudformationCodedeploySnapshot: !And 
+    - !Not 
+      - !Condition hasCloudformationCodedeployNoVersion
+    - !Not 
+      - !Equals 
+        - !Select 
+          - '0'
+          - !Split 
+            - '-'
+            - !FindInMap 
+              - Constants
+              - CloudformationCodedeployCoordinates
+              - Version
+        - !FindInMap 
+          - Constants
+          - CloudformationCodedeployCoordinates
+          - Version
+  hasCloudformationTemplateTomcatNoVersion: !Equals 
+    - !FindInMap 
+      - Constants
+      - CloudformationTemplateTomcatCoordinates
+      - Version
+    - ''
+  hasCloudformationTemplateTomcatSnapshot: !And 
+    - !Not 
+      - !Condition hasCloudformationTemplateTomcatNoVersion
+    - !Not 
+      - !Equals 
+        - !Select 
+          - '0'
+          - !Split 
+            - '-'
+            - !FindInMap 
+              - Constants
+              - CloudformationTemplateTomcatCoordinates
+              - Version
+        - !FindInMap 
+          - Constants
+          - CloudformationTemplateTomcatCoordinates
+          - Version
+Resources:
+  PARxxSTAGExxxxAPPxxINSCloudformationCodedeployInstallationTarGzForTomcat:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: PARxxSTAGExxxxAPPxxINSCloudformationCodedeployInstallationTarGzForTomcat
+      Type: String
+      Value: !If 
+        - hasCloudformationCodedeployNoVersion
+        - !Sub 
+          - '${protocol}${bucket}/${artifactId}.tar.gz'
+          - protocol: !FindInMap 
+              - Constants
+              - Path
+              - Protocol
+            bucket: !ImportValue BCTBuildNameOutput
+            artifactId: !FindInMap 
+              - Constants
+              - CloudformationCodedeployCoordinates
+              - ArtifactId
+        - !If 
+          - hasCloudformationCodedeploySnapshot
+          - !Sub 
+            - >-
+              ${protocol}${bucket}/snapshots/${groupId}/${artifactId}/${version}/${artifactId}-${version_no_snapshot}-${timestamp}.tar.gz
+            - protocol: !FindInMap 
+                - Constants
+                - Path
+                - Protocol
+              bucket: !ImportValue BCTBuildNameOutput
+              groupId: !FindInMap 
+                - Constants
+                - CloudformationCodedeployCoordinates
+                - GroupId
+              artifactId: !FindInMap 
+                - Constants
+                - CloudformationCodedeployCoordinates
+                - ArtifactId
+              version: !FindInMap 
+                - Constants
+                - CloudformationCodedeployCoordinates
+                - Version
+              version_no_snapshot: !Select 
+                - '0'
+                - !Split 
+                  - '-'
+                  - !FindInMap 
+                    - Constants
+                    - CloudformationCodedeployCoordinates
+                    - Version
+              timestamp: !Ref CloudformationCodedeployTimeStampIfSnaphost
+          - !Sub 
+            - >-
+              ${protocol}${bucket}/releases/${groupId}/${artifactId}/${version}/${artifactId}-${version}.tar.gz
+            - protocol: !FindInMap 
+                - Constants
+                - Path
+                - Protocol
+              bucket: !ImportValue BCTBuildNameOutput
+              groupId: !FindInMap 
+                - Constants
+                - CloudformationCodedeployCoordinates
+                - GroupId
+              artifactId: !FindInMap 
+                - Constants
+                - CloudformationCodedeployCoordinates
+                - ArtifactId
+              version: !FindInMap 
+                - Constants
+                - CloudformationCodedeployCoordinates
+                - Version
+  PARxxSTAGExxxxAPPxxINSCloudformationTemplateTomcatInstallationTarGz:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: PARxxSTAGExxxxAPPxxINSCloudformationTemplateTomcatInstallationTarGz
+      Type: String
+      Value: !If 
+        - hasCloudformationTemplateTomcatNoVersion
+        - !Sub 
+          - '${protocol}${bucket}/${artifactId}.tar.gz'
+          - protocol: !FindInMap 
+              - Constants
+              - Path
+              - Protocol
+            bucket: !ImportValue BCTBuildNameOutput
+            artifactId: !FindInMap 
+              - Constants
+              - CloudformationTemplateTomcatCoordinates
+              - ArtifactId
+        - !If 
+          - hasCloudformationTemplateTomcatSnapshot
+          - !Sub 
+            - >-
+              ${protocol}${bucket}/snapshots/${groupId}/${artifactId}/${version}/${artifactId}-${version_no_snapshot}-${timestamp}.tar.gz
+            - protocol: !FindInMap 
+                - Constants
+                - Path
+                - Protocol
+              bucket: !ImportValue BCTBuildNameOutput
+              groupId: !FindInMap 
+                - Constants
+                - CloudformationTemplateTomcatCoordinates
+                - GroupId
+              artifactId: !FindInMap 
+                - Constants
+                - CloudformationTemplateTomcatCoordinates
+                - ArtifactId
+              version: !FindInMap 
+                - Constants
+                - CloudformationTemplateTomcatCoordinates
+                - Version
+              version_no_snapshot: !Select 
+                - '0'
+                - !Split 
+                  - '-'
+                  - !FindInMap 
+                    - Constants
+                    - CloudformationTemplateTomcatCoordinates
+                    - Version
+              timestamp: !Ref CloudformationTemplateTomcatTimeStampIfSnaphost
+          - !Sub 
+            - >-
+              ${protocol}${bucket}/releases/${groupId}/${artifactId}/${version}/${artifactId}-${version}.tar.gz
+            - protocol: !FindInMap 
+                - Constants
+                - Path
+                - Protocol
+              bucket: !ImportValue BCTBuildNameOutput
+              groupId: !FindInMap 
+                - Constants
+                - CloudformationTemplateTomcatCoordinates
+                - GroupId
+              artifactId: !FindInMap 
+                - Constants
+                - CloudformationTemplateTomcatCoordinates
+                - ArtifactId
+              version: !FindInMap 
+                - Constants
+                - CloudformationTemplateTomcatCoordinates
+                - Version
+  INSxxSTAGExxxxAPPxxTomcat:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: ami-cfe4b2b0
+      InstanceType: t2.small
+      SubnetId: !ImportValue 
+        Ref: SBNOutputReference
+      SecurityGroupIds: !If 
+        - OneSCG
+        - - !ImportValue 
+            Ref: SCGOutputReference1
+        - !If 
+          - TwoSCGs
+          - - !ImportValue 
+              Ref: SCGOutputReference1
+            - !ImportValue 
+              Ref: SCGOutputReference2
+          - - !ImportValue 
+              Ref: SCGOutputReference1
+            - !ImportValue 
+              Ref: SCGOutputReference2
+            - !ImportValue 
+              Ref: SCGOutputReference3
+      Tags:
+        - Key: Name
+          Value: INSxxSTAGExxxxAPPxxTomcat
+      IamInstanceProfile: !ImportValue IPRBuildOutput
+      KeyName: dmafreetier
+      UserData: !Base64 
+        'Fn::Join':
+          - |+
+
+          - - '#!/bin/bash -ex'
+            - SOURCE_FILE=\
+            - !GetAtt 
+              - >-
+                PARxxSTAGExxxxAPPxxINSCloudformationCodedeployInstallationTarGzForTomcat
+              - Value
+            - TARGET_DIR=cloudformation_codedeploy_installation
+            - mkdir -p /tmp/$TARGET_DIR
+            - TARGET_FILE=install.tar.gz
+            - aws s3 cp $SOURCE_FILE /tmp/$TARGET_DIR/$TARGET_FILE
+            - cd /tmp/$TARGET_DIR
+            - tar xvfz $TARGET_FILE
+            - ./install_codedeploy.sh
+            - cd /tmp
+            - rm -rf $TARGET_DIR
+            - SOURCE_FILE=\
+            - !GetAtt 
+              - PARxxSTAGExxxxAPPxxINSCloudformationTemplateTomcatInstallationTarGz
+              - Value
+            - TARGET_DIR=cloudformation_template_tomcat_installation
+            - mkdir -p /tmp/$TARGET_DIR
+            - TARGET_FILE=install.tar.gz
+            - aws s3 cp $SOURCE_FILE /tmp/$TARGET_DIR/$TARGET_FILE
+            - cd /tmp/$TARGET_DIR
+            - tar xvfz $TARGET_FILE
+            - ./install_tomcat.sh
+            - cd /tmp
+            - rm -rf $TARGET_DIR
+  PARxxSTAGExxxxAPPxxINSTomcatPrivateIp:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: PARxxSTAGExxxxAPPxxINSTomcatPrivateIp
+      Type: String
+      Value: !GetAtt 
+        - INSxxSTAGExxxxAPPxxTomcat
+        - PrivateIp
